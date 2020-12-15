@@ -12,6 +12,8 @@
 #ifndef _SECCOMP_BPF_H_
 #define _SECCOMP_BPF_H_
 
+#include "config.h"
+
 #define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stddef.h>
@@ -21,14 +23,18 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <sys/prctl.h>
+/*#include <sys/prctl.h>*/
 #ifndef PR_SET_NO_NEW_PRIVS
 # define PR_SET_NO_NEW_PRIVS 38
 #endif
-
+#ifdef __MINGW32__
+#else
+# include <syslog.h>
 #include <linux/unistd.h>
 #include <linux/audit.h>
 #include <linux/filter.h>
+#endif
+
 #ifdef HAVE_LINUX_SECCOMP_H
 # include <linux/seccomp.h>
 #endif

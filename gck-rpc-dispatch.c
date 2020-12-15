@@ -35,6 +35,7 @@
 #include <sys/param.h>
 #ifdef __MINGW32__
 # include <winsock2.h>
+# include <WS2tcpip.h>
 #else
 # include <sys/socket.h>
 # include <sys/un.h>
@@ -51,7 +52,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
+#ifdef __MINGW32__
+#else
 #include <syslog.h>
+#endif
 
 #ifdef SECCOMP
 #include <seccomp.h>
@@ -61,7 +65,7 @@
 #endif /* DEBUG_SECCOMP */
 #include <fcntl.h> /* for seccomp init */
 #endif /* SECCOMP */
-#include <sys/mman.h>
+/*#include <sys/mman.h>*/
 
 /* Where we dispatch the calls to */
 static CK_FUNCTION_LIST_PTR pkcs11_module = NULL;

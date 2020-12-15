@@ -33,6 +33,7 @@
 #include <sys/param.h>
 #ifdef __MINGW32__
 # include <winsock2.h>
+# include <Ws2tcpip.h>
 #else
 # include <sys/socket.h>
 # include <sys/un.h>
@@ -330,16 +331,26 @@ static int _connect_to_host_port(char *host, char *port)
 	struct addrinfo *ai, *first, hints;
 	int res, sock, one = 1;
 
+	debug(("_connect_to_host_port: enter"));
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;		/* Either IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_STREAM;	/* Only stream oriented sockets */
 
-	if ((res = getaddrinfo(host, port, &hints, &ai)) < 0) {
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags = AI_PASSIVE;
+
+
+	debug(("_connect_to_host_port: getaddrinfo %s %s", host, port));
+	if ((res = getaddrinfo(host, port, &hints, &ai)) != 0) {
 		gck_rpc_warn("couldn't resolve host '%.100s' or service '%.100s' : %.100s\n",
 			     host, port, gai_strerror(res));
+		debug(("_connect_to_host_port: getaddrinfo failed"));
 		return -1;
 	}
 
+	debug(("_connect_to_host_port: getaddrinfo OK"));
 	sock = -1;
 	first = ai;
 
@@ -347,45 +358,59 @@ static int _connect_to_host_port(char *host, char *port)
 	 * our options and connect()
 	 */
 	while (ai) {
+		debug(("_connect_to_host_port: getnameinfo"));
 		if ((res = getnameinfo(ai->ai_addr, ai->ai_addrlen,
 				       hoststr, sizeof(hoststr), portstr, sizeof(portstr),
 				       NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
 			gck_rpc_warn("couldn't call getnameinfo on pkcs11 socket (%.100s %.100s): %.100s",
 				     host, port, gai_strerror(res));
+			debug(("_connect_to_host_port: getnameinfo failed %s", gai_strerror(res) ));
 			sock = -1;
 			continue;
 		}
 
+		debug(("_connect_to_host_port: getnameinfo OK"));
 		snprintf(hostport, sizeof(hostport),
 			 (ai->ai_family == AF_INET6) ? "[%s]:%s" : "%s:%s", hoststr, portstr);
 
+		debug(("_connect_to_host_port: socket"));
 		sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 
 		if (sock >= 0) {
+			debug(("_connect_to_host_port: socket OK"));
+			debug(("_connect_to_host_port: setsockopt"));
 			if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 				       (char *)&one, sizeof (one)) == -1) {
 				gck_rpc_warn("couldn't set pkcs11 "
 					     "socket protocol options (%.100s): %.100s",
 					     hostport, strerror (errno));
+				debug(("_connect_to_host_port: setsockopt failed %s", strerror (errno)));
 				goto next;
 			}
+			debug(("_connect_to_host_port: setsockopt OK"));
 
 #ifndef __MINGW32__
 			/* close on exec */
+			debug(("_connect_to_host_port: fcntl "));
 			if (fcntl(sock, F_SETFD, 1) == -1) {
 				gck_rpc_warn("couldn't secure socket (%.100s): %.100s",
 					     hostport, strerror(errno));
+				debug(("_connect_to_host_port: fcntl failed %s", strerror(errno)));
 				goto next;
 			}
+			debug(("_connect_to_host_port: fcntl OK "));
 #endif
 
+			debug(("_connect_to_host_port: connect "));
 			if (connect(sock, ai->ai_addr, ai->ai_addrlen) < 0) {
 				close(sock);
 				warning(("couldn't connect (%.100s): %s",
 					 hostport, strerror(errno)));
+				debug(("_connect_to_host_port: connect failed %s", strerror(errno)));
 				goto next;
 			}
 
+			debug(("_connect_to_host_port: connect OK"));
 			break;
 		next:
 			close(sock);
@@ -417,28 +442,49 @@ static CK_RV call_connect(CallState * cs)
 	assert(cs->call_status == CALL_INVALID);
 	assert(pkcs11_socket_path[0]);
 
-	debug(("connecting to: %s", pkcs11_socket_path));
+	debug(("call_connect: connecting to: %s", pkcs11_socket_path));
 
 	memset(&addr, 0, sizeof(addr));
+
+#ifdef  __MINGW32__
+        {
+                WSADATA wsaData;
+                int iResult;
+
+                iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+                if (iResult != 0) {
+                        gck_rpc_warn("WSAStartup failed: %d\n", iResult);
+                        return -1;
+                }
+        }
+#endif
 
 	if (! strncmp("tcp://", pkcs11_socket_path, 6) ||
 	    ! strncmp("tls://", pkcs11_socket_path, 6)) {
 		char *host, *port;
 
+		debug(("call_connect: rpc_parse_host_port"));
 		if (! gck_rpc_parse_host_port(pkcs11_socket_path + 6, &host, &port)) {
 			gck_rpc_warn("failed parsing pkcs11 socket : %s",
 				     pkcs11_socket_path);
+			debug(("call_connect: rpc_parse_host_port DEVICE_ERROR"));
 			return CKR_DEVICE_ERROR;
 		}
+		debug(("call_connect: rpc_parse_host_port OK"));
+		debug(("call_connect: parsed host port %s, %s", host, port));
 
+		debug(("call_connect: _connect_to_host_port"));
 		if ((sock = _connect_to_host_port(host, port)) == -1) {
 			free(host);
+			debug(("call_connect: _connect_to_host_port DEVICE_ERROR"));
 			return CKR_DEVICE_ERROR;
 		}
 
 		free(host);
 
 		if (! strncmp("tls://", pkcs11_socket_path, 6)) {
+
+			debug(("call_connect: initializing TLS"));
 			cs->tls = calloc(1, sizeof(GckRpcTlsPskState));
 			if (cs->tls == NULL) {
 				warning(("can't allocate memory for TLS-PSK"));
@@ -456,6 +502,7 @@ static CK_RV call_connect(CallState * cs)
 			}
 		}
 	} else {
+		debug(("call_connect: going via AF_UNIX"));
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, pkcs11_socket_path,
 			sizeof(addr.sun_path));
@@ -517,15 +564,18 @@ static CK_RV call_lookup(CallState ** ret)
 	CallState *cs = NULL;
 	CK_RV rv;
 
+	debug(("call_lookup: enter"));
 	assert(ret);
 
 	pthread_mutex_lock(&call_state_mutex);
 
 	/* Pop one from the pool if possible */
+	debug(("call_lookup: popup next free call state from pool"));
 	if (call_state_pool != NULL) {
 		cs = call_state_pool;
 		call_state_pool = cs->next;
 		cs->next = NULL;
+		debug(("call_lookup: assert call_state_pool"));
 		assert(n_call_state_pool > 0);
 		--n_call_state_pool;
 	}
@@ -540,8 +590,10 @@ static CK_RV call_lookup(CallState ** ret)
 		cs->call_status = CALL_INVALID;
 
 		/* Try to connect the call */
+		debug(("call_lookup: call_connect"));
 		rv = call_connect(cs);
 		if (rv != CKR_OK) {
+			debug(("call_lookup: call_connect Not OK"));
 			free(cs);
 			return rv;
 		}
@@ -1161,6 +1213,7 @@ proto_read_sesssion_info(GckRpcMessage * msg, CK_SESSION_INFO_PTR info)
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
 #define IN_ULONG(val) \
+	debug ((#val ": ULONG =%d", val)); \
 	if (!gck_rpc_message_write_ulong (_cs->req, val)) \
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
@@ -1200,6 +1253,7 @@ proto_read_sesssion_info(GckRpcMessage * msg, CK_SESSION_INFO_PTR info)
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
 #define IN_ATTRIBUTE_ARRAY(arr, num) \
+	debug ((#arr #num": ATR Array len %d", num)); \
 	if (num != 0 && arr == NULL) \
 		{ _ret = CKR_ARGUMENTS_BAD; goto _cleanup; } \
 	if (!gck_rpc_message_write_attribute_array (_cs->req, (arr), (num))) \
@@ -1391,16 +1445,27 @@ static CK_RV rpc_C_Initialize(CK_VOID_PTR init_args)
 	pkcs11_app_id = (uint64_t) rand() << 32 | rand();
 
 	/* Call through and initialize the daemon */
+	debug(("C_Initialize: call_lookup"));
 	ret = call_lookup(&cs);
 	if (ret == CKR_OK) {
+		debug(("C_Initialize: call_lookup OK"));
+		debug(("C_Initialize: call_prepare"));
 		ret = call_prepare(cs, GCK_RPC_CALL_C_Initialize);
-		if (ret == CKR_OK)
+		if (ret == CKR_OK) {
+			debug(("C_Initialize: call_prepare OK"));
+			debug(("C_Initialize: rpc_message_write_byte"));
 			if (!gck_rpc_message_write_byte_array
 			    (cs->req, (unsigned char *)GCK_RPC_HANDSHAKE,
 			     GCK_RPC_HANDSHAKE_LEN))
 				ret = CKR_HOST_MEMORY;
-		if (ret == CKR_OK)
+		}
+		if (ret == CKR_OK) {
+			debug(("C_Initialize: rpc_message_write_byte OK"));
 			ret = call_run(cs);
+		}
+		else
+			debug(("C_Initialize: rpc_message_write_byte HOST_MEMORY"));
+		debug(("C_Initialize: call_done"));
 		call_done(cs, ret);
 	}
 

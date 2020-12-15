@@ -34,6 +34,22 @@
 #include <assert.h>
 #endif
 
+/* -----------------------------------------------------------------------------
+ * LOGGING and DEBUGGING
+ */
+#if DEBUG_OUTPUT
+#define debug(x) gck_rpc_debug x
+#else
+#define debug(x)
+#endif
+#define warning(x) gck_rpc_warn x
+
+#define return_val_if_fail(x, v) \
+        if (!(x)) { gck_rpc_warn ("'%s' not true at %s", #x, __func__); return v; }
+
+/* -----------------------------------------------------------------------------
+ */
+
 GckRpcMessage *gck_rpc_message_new(EggBufferAllocator allocator)
 {
 	GckRpcMessage *msg;
@@ -265,26 +281,34 @@ gck_rpc_message_write_attribute_array(GckRpcMessage * msg,
 	/* Write the number of items */
 	egg_buffer_add_uint32(&msg->buffer, num);
 
+
 	for (i = 0; i < num; ++i) {
 		attr = &(arr[i]);
+		
+		debug((" Attribute Type UINT32=%lX ", attr->type));
 
 		/* The attribute type */
 		egg_buffer_add_uint32(&msg->buffer, attr->type);
 
 		/* Write out the attribute validity */
 		validity = (((CK_LONG) attr->ulValueLen) == -1) ? 0 : 1;
+		debug((" Attribute validity BYTE = %lX", validity));
 		egg_buffer_add_byte(&msg->buffer, validity);
 
 		/* The attribute length and value */
 		if (validity) {
+			debug((" Attribute Length UINT32=%lX ", attr->ulValueLen));
 			egg_buffer_add_uint32(&msg->buffer, attr->ulValueLen);
 			if (gck_rpc_has_bad_sized_ulong_parameter(attr)) {
 				uint64_t val = *(CK_ULONG *)attr->pValue;
+				debug((" Attribute Valuee  UINT64= 0x%" PRIx64 "", val));
 
 				egg_buffer_add_byte_array (&msg->buffer, (unsigned char *)&val, sizeof (val));
-			} else
+			} else {
+
 				egg_buffer_add_byte_array(&msg->buffer, attr->pValue,
 							  attr->ulValueLen);
+			}
 		}
 	}
 

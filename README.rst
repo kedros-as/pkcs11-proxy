@@ -17,8 +17,12 @@ An ubuntu PPA that tracks this version is ppa:leifj
 Build and Install for windows
 =============================
 
-I used crosscompiler on MAC to create 64b staticaly linked (with openssl 
+I used MINGW64 cross-compiler on MAC to create 64b staticaly linked (with openssl 
 an gcc runtime)  pkcs11-proxy.dll
+
+- install mingw-w64 package
+
+        $ brew install mingw-w64
 
 - set correct compilers binaries in Toolchain-cross-mingw64.cmake file
 - set correct paths in CMAKE_FIND_ROOT_PATH variable for toolchain and openssl 
@@ -30,7 +34,7 @@ an gcc runtime)  pkcs11-proxy.dll
         $ cd build
 
         $ cmake -DCMAKE_TOOLCHAIN_FILE=../Toolchain-cross-mingw32.cmake ..
-        $ make VERBOSE=1
+        $ make 
 - install libpkcs11-proxy.dll 
         
         cp libpkcs11-proxy.dll C:/path/to/application

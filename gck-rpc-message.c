@@ -175,6 +175,7 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		gck_rpc_warn("invalid message: signature doesn't match");
 		return 0;
 	}
+	gck_rpc_log("Message Signature %s", val);
 
 	return 1;
 }

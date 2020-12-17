@@ -78,7 +78,11 @@ static char tls_psk_key_filename[MAXPATHLEN] = { 0, };
 /* -----------------------------------------------------------------------------
  * LOGGING and DEBUGGING
  */
-#if DEBUG_OUTPUT
+#ifndef DEBUG_OUTPUT
+#define DEBUG_OUTPUT 0
+#endif
+
+#if (DEBUG_OUTPUT == 1)
 #define debug(x) gck_rpc_debug x
 #else
 #define debug(x)
@@ -1253,7 +1257,7 @@ proto_read_sesssion_info(GckRpcMessage * msg, CK_SESSION_INFO_PTR info)
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
 #define IN_ATTRIBUTE_ARRAY(arr, num) \
-	debug ((#arr #num": ATR Array len %d", num)); \
+	debug (("ATR Array follows")); \
 	if (num != 0 && arr == NULL) \
 		{ _ret = CKR_ARGUMENTS_BAD; goto _cleanup; } \
 	if (!gck_rpc_message_write_attribute_array (_cs->req, (arr), (num))) \
@@ -1347,6 +1351,7 @@ static CK_RV rpc_C_Initialize(CK_VOID_PTR init_args)
 	pid_t pid;
 
 	debug(("C_Initialize: enter"));
+	debug(("CK_ULONG size %d", sizeof(CK_ULONG) ));
 
 #ifdef _DEBUG
 	GCK_RPC_CHECK_CALLS();
@@ -1419,6 +1424,7 @@ static CK_RV rpc_C_Initialize(CK_VOID_PTR init_args)
 					 "%s.pkcs11", path);
 			pkcs11_socket_path[sizeof(pkcs11_socket_path) - 1] = 0;
 		} else {
+			warning(("C_Initialize: environment variable PKCS11_PROXY_SOCKET is not defined "));
 			ret =  CKR_FUNCTION_NOT_SUPPORTED;
 			goto done;
 		}

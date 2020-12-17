@@ -29,6 +29,22 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+/* -----------------------------------------------------------------------------
+ * LOGGING and DEBUGGING
+ */
+#ifndef DEBUG_OUTPUT
+#define DEBUG_OUTPUT 0
+#endif
+#if (DEBUG_OUTPUT == 1)
+#define debug(x) gck_rpc_debug x
+#else
+#define debug(x)
+#endif
+#define warning(x) gck_rpc_warn x
+
+#define return_val_if_fail(x, v) \
+        if (!(x)) { gck_rpc_warn ("'%s' not true at %s", #x, __func__); return v; }
+
 
 static void do_log(const char *pref, const char *msg, va_list va)
 {
@@ -42,6 +58,33 @@ static void do_log(const char *pref, const char *msg, va_list va)
 
 	vsnprintf(buffer + len, sizeof(buffer) - len, msg, va);
 	gck_rpc_log(buffer);
+}
+
+
+void log_buff_hex(char *data, size_t len)
+{
+	char label[]="DATA DUMP:";
+	log_buff_hexs(label, data, len);
+	return ;
+}
+
+void log_buff_hexs(char *label, char *data, size_t len)
+{
+	size_t i;
+	char *s = malloc(len * 3 + 1);
+	char *p = s;
+
+	if (!len) return;
+
+	for (i = 0; i < len; i++)
+	{
+			p = (char*)s + i*2;
+			sprintf(p, "%02X", (char) data[i]);
+	}
+	debug(("%s %s\n", label, s));
+	free(s);
+
+	return ;
 }
 
 void gck_rpc_warn(const char *msg, ...)

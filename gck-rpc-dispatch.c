@@ -32,6 +32,7 @@
 #include "pkcs11/pkcs11i.h"
 
 #include <sys/types.h>
+#include <inttypes.h>
 #include <sys/param.h>
 #ifdef __MINGW32__
 # include <winsock2.h>
@@ -118,9 +119,9 @@ static int _install_dispatch_syscall_filter(int use_tls);
  * LOGGING and DEBUGGING
  */
 #ifndef DEBUG_OUTPUT
-#define DEBUG_OUTPUT 1
+#define DEBUG_OUTPUT 0
 #endif
-#if DEBUG_OUTPUT
+#if (DEBUG_OUTPUT == 1)
 #define debug(x) gck_rpc_debug x
 #else
 #define debug(x)
@@ -136,7 +137,7 @@ void gck_rpc_log(const char *msg, ...)
 	va_list ap;
 
 	va_start(ap, msg);
-#if DEBUG_OUTPUT
+#if (DEBUG_OUTPUT == 1)
 	vfprintf(stderr, msg, ap);
 	fprintf(stderr, "\n");
 #else
@@ -428,6 +429,7 @@ proto_read_attribute_buffer(CallState * cs, CK_ATTRIBUTE_PTR * result,
 	if (!egg_buffer_get_uint32
 	    (&msg->buffer, msg->parsed, &msg->parsed, &n_attrs))
 		return PARSE_ERROR;
+	debug(("# of Attributes UINT32 =%d", n_attrs));
 
 	/* Allocate memory for the attribute structures */
 	attrs = call_alloc(cs, n_attrs * sizeof(CK_ATTRIBUTE));
@@ -443,12 +445,14 @@ proto_read_attribute_buffer(CallState * cs, CK_ATTRIBUTE_PTR * result,
 			return PARSE_ERROR;
 
 		attrs[i].type = value;
+		debug(("  Attribute Type UINT32 =%d", value));
 
 		/* The number of bytes to allocate */
 		if (!egg_buffer_get_uint32
 		    (&msg->buffer, msg->parsed, &msg->parsed, &value))
 			return PARSE_ERROR;
 
+		debug(("  Allocate Attribute Buffer Length UINT32 =%d", value));
 		if (value == 0) {
 			attrs[i].pValue = NULL;
 			attrs[i].ulValueLen = 0;
@@ -485,11 +489,14 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 
 	/* Make sure this is in the right order */
 	assert(!msg->signature || gck_rpc_message_verify_part(msg, "aA"));
+	debug(("proto_read_attribute_array"));
 
 	/* Read the number of attributes */
 	if (!egg_buffer_get_uint32
 	    (&msg->buffer, msg->parsed, &msg->parsed, &n_attrs))
 		return PARSE_ERROR;
+
+	debug(("# of Attributes UINT32 =%d", n_attrs));
 
 	if (! n_attrs) {
 		/* If there are no attributes, it makes most sense to make result
@@ -515,16 +522,19 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 			return PARSE_ERROR;
 
 		attrs[i].type = value;
+		debug(("  Attribute Type UINT32 =%d", value));
 
 		/* Whether this one is valid or not */
 		if (!egg_buffer_get_byte
 		    (&msg->buffer, msg->parsed, &msg->parsed, &valid))
 			return PARSE_ERROR;
 
+		debug(("  Attribute valid  BYTE  =%d", valid));
 		if (valid) {
 			if (!egg_buffer_get_uint32
 			    (&msg->buffer, msg->parsed, &msg->parsed, &value))
 				return PARSE_ERROR;
+			debug(("  Attribute length  UINT32  =%d", value));
 			if (!egg_buffer_get_byte_array
 			    (&msg->buffer, msg->parsed, &msg->parsed, &data,
 			     &n_data))
@@ -535,19 +545,27 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 				    ("attribute length and data do not match");
 				return PARSE_ERROR;
 			}
+			log_buff_hexs(" Attribute value hex dump = ", data, n_data);
 
 			CK_ULONG a;
 
+			/* value is length of byte array
+			 * if len is 64bit and CK_ULONG here is 32 bit and type has ulong size do conversion */
 			if (value == sizeof (uint64_t) &&
 			    value != sizeof (CK_ULONG) &&
 			    gck_rpc_has_ulong_parameter(attrs[i].type)) {
-
+				debug(("Attribure lenth is of size 64 bit and CK_ULONG is 32 (%d B) bit and type has ulong size do conversion", sizeof(CK_ULONG)));
 				value = sizeof (CK_ULONG);
 				a = *(uint64_t *)data;
 				*(CK_ULONG *)data = a;
 			}
 			attrs[i].pValue = (CK_VOID_PTR) data;
 			attrs[i].ulValueLen = value;
+			debug(("  Attribute final value len =%d", value));
+			if( gck_rpc_has_ulong_parameter(attrs[i].type)) {
+				if( value == sizeof (uint64_t) )  debug(("  Attribute final 64b value =%"PRIx64" ", *((uint64_t *)(attrs[i].pValue)) ));
++                               else if (value == 4) debug(("  Attribute final 32b value =  %d", *((uint32_t*) (attrs[i].pValue)) ));
+			}
 		} else {
 			attrs[i].pValue = NULL;
 			attrs[i].ulValueLen = -1;
@@ -792,7 +810,8 @@ static CK_RV proto_write_session_info(CallState * cs, CK_SESSION_INFO_PTR info)
 
 #define IN_ULONG(val) \
 	if (!gck_rpc_message_read_ulong (cs->req, &val)) \
-		{ _ret = PARSE_ERROR; goto _cleanup; }
+		{ _ret = PARSE_ERROR; goto _cleanup; } \
+	debug ((#val ": Vaulue ULONG =%"PRIx64"", val));
 
 #define IN_SPACE_STRING(val, len)			   \
 	_ret = proto_read_space_string (cs, &val, len);	   \
@@ -811,6 +830,7 @@ static CK_RV proto_write_session_info(CallState * cs, CK_SESSION_INFO_PTR info)
 	if (_ret != CKR_OK) goto _cleanup;
 
 #define IN_ATTRIBUTE_BUFFER(buffer, buffer_len) \
+	debug ((#buffer ": IN ATTR BUFFER")); \
 	_ret = proto_read_attribute_buffer (cs, &buffer, &buffer_len); \
 	if (_ret != CKR_OK) goto _cleanup;
 
@@ -835,6 +855,7 @@ static CK_RV proto_write_session_info(CallState * cs, CK_SESSION_INFO_PTR info)
 	_ret = proto_write_ulong_array (cs, array, len, _ret);
 
 #define OUT_ATTRIBUTE_ARRAY(array, len) \
+	debug ((#array ": OUT ATTR ARRAY")); \
 	/* Note how we filter return codes */ \
 	_ret = proto_write_attribute_array (cs, array, len, _ret);
 
@@ -2252,7 +2273,7 @@ static void run_dispatch_loop(CallState *cs)
 		return ;
 	}
 
-	gck_rpc_log("New session %d-%d (client %s, port %s)\n", (uint32_t) (cs->appid >> 32),
+	gck_rpc_log("New session %d-%d (client %s, port %s)", (uint32_t) (cs->appid >> 32),
 		    (uint32_t) cs->appid, hoststr, portstr);
 
 	/* Setup our buffers */
@@ -2270,6 +2291,7 @@ static void run_dispatch_loop(CallState *cs)
 		if (! cs->read(cs, buf, 4))
 			break;
 
+		debug(("======== new message==========="));
 		/* Calculate the number of bytes */
 		len = egg_buffer_decode_uint32(buf);
 		if (len >= 0x0FFFFFFF) {
@@ -2278,6 +2300,7 @@ static void run_dispatch_loop(CallState *cs)
 			break;
 		}
 
+		gck_rpc_log("DATA: len %u bytes", len );
 		/* Allocate memory */
 		egg_buffer_reserve(&cs->req->buffer, cs->req->buffer.len + len);
 		if (egg_buffer_has_error(&cs->req->buffer)) {
@@ -2288,6 +2311,8 @@ static void run_dispatch_loop(CallState *cs)
 		/* ... and read/parse in the actual message */
 		if (!cs->read(cs, cs->req->buffer.buf, len))
 			break;
+		
+		log_buff_hex(cs->req->buffer.buf,len);
 
 		egg_buffer_add_empty(&cs->req->buffer, len);
 
@@ -2600,7 +2625,7 @@ int gck_rpc_layer_initialize(const char *prefix, CK_FUNCTION_LIST_PTR module)
 		}
 	}
 
-	gck_rpc_log("Listening on: %s\n", pkcs11_socket_path);
+	gck_rpc_log("Listening on: %s", pkcs11_socket_path);
 
 	pkcs11_module = module;
 	pkcs11_socket = sock;

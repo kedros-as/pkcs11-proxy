@@ -20,7 +20,7 @@ Build and Install for windows
 I used MINGW64 cross-compiler on MAC to create 64b staticaly linked (with openssl 
 an gcc runtime)  pkcs11-proxy.dll
 
-- install mingw-w64 package
+- install mingw-w64 package::
 
         $ brew install mingw-w64
 
@@ -28,14 +28,14 @@ an gcc runtime)  pkcs11-proxy.dll
 - set correct paths in CMAKE_FIND_ROOT_PATH variable for toolchain and openssl 
 - Comment out all targets except client library (pkcs11-proxy). Only client 
   library is currently supported for 64bit version.   
-- build library 
+- build library::
 
         $ mkdir build
         $ cd build
 
         $ cmake -DCMAKE_TOOLCHAIN_FILE=../Toolchain-cross-mingw32.cmake ..
         $ make 
-- install libpkcs11-proxy.dll 
+- install libpkcs11-proxy.dll :: 
         
         cp libpkcs11-proxy.dll C:/path/to/application
 

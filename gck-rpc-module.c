@@ -1213,6 +1213,7 @@ proto_read_sesssion_info(GckRpcMessage * msg, CK_SESSION_INFO_PTR info)
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
 #define IN_ULONG(val) \
+	debug ((#val ": ULONG =%d", val)); \
 	if (!gck_rpc_message_write_ulong (_cs->req, val)) \
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
@@ -1252,6 +1253,7 @@ proto_read_sesssion_info(GckRpcMessage * msg, CK_SESSION_INFO_PTR info)
 		{ _ret = CKR_HOST_MEMORY; goto _cleanup; }
 
 #define IN_ATTRIBUTE_ARRAY(arr, num) \
+	debug ((#arr #num": ATR Array len %d", num)); \
 	if (num != 0 && arr == NULL) \
 		{ _ret = CKR_ARGUMENTS_BAD; goto _cleanup; } \
 	if (!gck_rpc_message_write_attribute_array (_cs->req, (arr), (num))) \

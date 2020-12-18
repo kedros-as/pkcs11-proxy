@@ -27,6 +27,7 @@
 #include "gck-rpc-private.h"
 
 #include <string.h>
+#include <inttypes.h>
 
 #ifdef G_DISABLE_ASSERT
 #define assert(x)
@@ -151,7 +152,7 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		gck_rpc_warn("invalid message: couldn't read call identifier");
 		return 0;
 	}
-	debug(("P CallID UINT32 %lX", val));
+	debug(("P CallID UINT32 %lX (%d)", call_id, call_id));
 
 	msg->signature = msg->sigverify = NULL;
 

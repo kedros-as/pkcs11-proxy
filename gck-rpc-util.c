@@ -58,6 +58,8 @@ void log_buff_hexs(char *label, char *data, size_t len)
 	char *s = malloc(len * 3 + 1);
 	char *p = s;
 
+	if (!len) return;
+
 	for (i = 0; i < len; i++)
 	{
 			p = (char*)s + i*2;

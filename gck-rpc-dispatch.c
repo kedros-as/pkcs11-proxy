@@ -485,11 +485,14 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 
 	/* Make sure this is in the right order */
 	assert(!msg->signature || gck_rpc_message_verify_part(msg, "aA"));
+	debug(("proto_read_attribute_array"));
 
 	/* Read the number of attributes */
 	if (!egg_buffer_get_uint32
 	    (&msg->buffer, msg->parsed, &msg->parsed, &n_attrs))
 		return PARSE_ERROR;
+
+	debug(("# of Attributes UINT32 =%d", n_attrs));
 
 	if (! n_attrs) {
 		/* If there are no attributes, it makes most sense to make result
@@ -515,16 +518,19 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 			return PARSE_ERROR;
 
 		attrs[i].type = value;
+		debug(("  Attribute Type UINT32 =%d", value));
 
 		/* Whether this one is valid or not */
 		if (!egg_buffer_get_byte
 		    (&msg->buffer, msg->parsed, &msg->parsed, &valid))
 			return PARSE_ERROR;
 
+		debug(("  Attribute valid  BYTE  =%d", valid));
 		if (valid) {
 			if (!egg_buffer_get_uint32
 			    (&msg->buffer, msg->parsed, &msg->parsed, &value))
 				return PARSE_ERROR;
+			debug(("  Attribute length  UINT32  =%d", value));
 			if (!egg_buffer_get_byte_array
 			    (&msg->buffer, msg->parsed, &msg->parsed, &data,
 			     &n_data))
@@ -535,19 +541,27 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 				    ("attribute length and data do not match");
 				return PARSE_ERROR;
 			}
+			log_buff_hexs(" Attribute value hex dump = ", data, n_data);
 
 			CK_ULONG a;
 
+			/* value is length of byte array
+			 * if len is 64bit and CK_ULONG here is 32 bit and type has ulong size do conversion */
 			if (value == sizeof (uint64_t) &&
 			    value != sizeof (CK_ULONG) &&
 			    gck_rpc_has_ulong_parameter(attrs[i].type)) {
-
+				debug(("Attribure lenth is of size 64 bit and CK_ULONG is 32 (%d B) bit and type has ulong size do conversion", sizeof(CK_ULONG)));
 				value = sizeof (CK_ULONG);
 				a = *(uint64_t *)data;
 				*(CK_ULONG *)data = a;
 			}
 			attrs[i].pValue = (CK_VOID_PTR) data;
 			attrs[i].ulValueLen = value;
+			debug(("  Attribute final value len =%d", value));
+			if( gck_rpc_has_ulong_parameter(attrs[i].type)) {
+				if( value == sizeof (uint64_t) )  debug(("  Attribute final 64b value =%"PRIx64" ", * attrs[i].pValue));
+				else if (value = 4) debug(("  Attribute final 32b value =  %d",* attrs[i].pValue));
+			}
 		} else {
 			attrs[i].pValue = NULL;
 			attrs[i].ulValueLen = -1;
@@ -2270,6 +2284,7 @@ static void run_dispatch_loop(CallState *cs)
 		if (! cs->read(cs, buf, 4))
 			break;
 
+		debug(("======== new message==========="));
 		/* Calculate the number of bytes */
 		len = egg_buffer_decode_uint32(buf);
 		if (len >= 0x0FFFFFFF) {

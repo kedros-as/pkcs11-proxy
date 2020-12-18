@@ -151,6 +151,7 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		gck_rpc_warn("invalid message: couldn't read call identifier");
 		return 0;
 	}
+	debug(("P CallID UINT32 %lX", val));
 
 	msg->signature = msg->sigverify = NULL;
 
@@ -169,15 +170,21 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		gck_rpc_warn("invalid message: bad call id: %d", call_id);
 		return 0;
 	}
-	if (type == GCK_RPC_REQUEST)
+	if (type == GCK_RPC_REQUEST) {
+		debug(("Request message "));
 		msg->signature = gck_rpc_calls[call_id].request;
-	else if (type == GCK_RPC_RESPONSE)
+	}
+	else if (type == GCK_RPC_RESPONSE) {
+		debug(("Response message "));
 		msg->signature = gck_rpc_calls[call_id].response;
+	}
 	else
 		assert(0 && "invalid message type");
 	msg->call_id = call_id;
 	msg->call_type = type;
 	msg->sigverify = msg->signature;
+
+	debug(("Expected Messasge signature %s",msg->signature));
 
 	/* Verify the incoming signature */
 	if (!egg_buffer_get_byte_array
@@ -191,7 +198,8 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		gck_rpc_warn("invalid message: signature doesn't match");
 		return 0;
 	}
-	gck_rpc_log("Message Signature %s", val);
+	debug(("P Received Messasge signature len= %d, string=%s",len, val));
+	log_buff_hexs("P Received signature hexdump:", val,  len);
 
 	return 1;
 }
@@ -281,6 +289,7 @@ gck_rpc_message_write_attribute_array(GckRpcMessage * msg,
 
 	/* Write the number of items */
 	egg_buffer_add_uint32(&msg->buffer, num);
+	debug(("Num of Attributes UINT32=%d ", num));
 
 
 	for (i = 0; i < num; ++i) {
@@ -306,7 +315,7 @@ gck_rpc_message_write_attribute_array(GckRpcMessage * msg,
 
 				egg_buffer_add_byte_array (&msg->buffer, (unsigned char *)&val, sizeof (val));
 			} else {
-
+				log_buff_hex(attr->pValue, attr->ulValueLen );
 				egg_buffer_add_byte_array(&msg->buffer, attr->pValue,
 							  attr->ulValueLen);
 			}

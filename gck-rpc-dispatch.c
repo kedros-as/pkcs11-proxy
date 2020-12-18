@@ -2222,23 +2222,6 @@ static int write_all(CallState *cs, void *data, size_t len)
 	return 1;
 }
 
-static void log_buff_hex(char *data, size_t len)
-{
-	size_t i;
-	char *s = malloc(len * 3 + 1);
-	char *p = s;
-
-	for (i = 0; i < len; i++)
-	{  
-			p = (char*)s + i*2;
-			sprintf(p, "%02X", (char) data[i]);
-	}
-	gck_rpc_log("DATA DUMP: %s\n",s);
-	free(s);
-
-	return ;
-}
-
 static void run_dispatch_loop(CallState *cs)
 {
 	unsigned char buf[4];

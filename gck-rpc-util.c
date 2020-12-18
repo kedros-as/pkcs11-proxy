@@ -44,6 +44,31 @@ static void do_log(const char *pref, const char *msg, va_list va)
 	gck_rpc_log(buffer);
 }
 
+
+void log_buff_hex(char *data, size_t len)
+{
+	char label[]="DATA DUMP:";
+	log_buff_hexs(label, data, len);
+	return ;
+}
+
+void log_buff_hexs(char *label, char *data, size_t len)
+{
+	size_t i;
+	char *s = malloc(len * 3 + 1);
+	char *p = s;
+
+	for (i = 0; i < len; i++)
+	{
+			p = (char*)s + i*2;
+			sprintf(p, "%02X", (char) data[i]);
+	}
+	gck_rpc_log("%s %s\n", label, s);
+	free(s);
+
+	return ;
+}
+
 void gck_rpc_warn(const char *msg, ...)
 {
 	va_list va;

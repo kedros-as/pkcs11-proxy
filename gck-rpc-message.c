@@ -324,7 +324,7 @@ gck_rpc_message_write_attribute_array(GckRpcMessage * msg,
 				egg_buffer_add_byte_array (&msg->buffer, (unsigned char *)&val, sizeof (val));
 			} else {
 				egg_buffer_add_uint32(&msg->buffer, attr->ulValueLen);
-				log_buff_hex(attr->pValue, attr->ulValueLen );
+				//log_buff_hex(attr->pValue, attr->ulValueLen );
 				egg_buffer_add_byte_array(&msg->buffer, attr->pValue,
 							  attr->ulValueLen);
 			}

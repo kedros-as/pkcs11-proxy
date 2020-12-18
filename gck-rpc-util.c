@@ -29,6 +29,22 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+/* -----------------------------------------------------------------------------
+ * LOGGING and DEBUGGING
+ */
+#ifndef DEBUG_OUTPUT
+#define DEBUG_OUTPUT 0
+#endif
+#if (DEBUG_OUTPUT == 1)
+#define debug(x) gck_rpc_debug x
+#else
+#define debug(x)
+#endif
+#define warning(x) gck_rpc_warn x
+
+#define return_val_if_fail(x, v) \
+        if (!(x)) { gck_rpc_warn ("'%s' not true at %s", #x, __func__); return v; }
+
 
 static void do_log(const char *pref, const char *msg, va_list va)
 {
@@ -65,7 +81,7 @@ void log_buff_hexs(char *label, char *data, size_t len)
 			p = (char*)s + i*2;
 			sprintf(p, "%02X", (char) data[i]);
 	}
-	gck_rpc_log("%s %s\n", label, s);
+	debug(("%s %s\n", label, s));
 	free(s);
 
 	return ;

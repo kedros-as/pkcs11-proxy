@@ -118,9 +118,9 @@ static int _install_dispatch_syscall_filter(int use_tls);
  * LOGGING and DEBUGGING
  */
 #ifndef DEBUG_OUTPUT
-#define DEBUG_OUTPUT 1
+#define DEBUG_OUTPUT 0
 #endif
-#if DEBUG_OUTPUT
+#if (DEBUG_OUTPUT == 1)
 #define debug(x) gck_rpc_debug x
 #else
 #define debug(x)
@@ -136,7 +136,7 @@ void gck_rpc_log(const char *msg, ...)
 	va_list ap;
 
 	va_start(ap, msg);
-#if DEBUG_OUTPUT
+#if (DEBUG_OUTPUT == 1)
 	vfprintf(stderr, msg, ap);
 	fprintf(stderr, "\n");
 #else

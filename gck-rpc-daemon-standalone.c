@@ -38,13 +38,27 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
-#include <syslog.h>
 
 #ifdef __MINGW32__
 # include <winsock2.h>
+#else 
+# include <syslog.h>
 #endif
 
+
 #define SOCKET_PATH "tcp://127.0.0.1"
+
+#ifndef DEBUG_OUTPUT
+#define DEBUG_OUTPUT 0
+#endif
+
+#if (DEBUG_OUTPUT == 1)
+#define debug(x) gck_rpc_debug x
+#else
+#define debug(x)
+#endif
+#define info(x) gck_rpc_info x
+#define warning(x) gck_rpc_warn x
 
 #ifdef SECCOMP
 #include <seccomp.h>
@@ -186,7 +200,7 @@ static CK_C_INITIALIZE_ARGS p11_init_args = {
 };
 #endif
 
-static int is_running = 1;
+int is_running = 1;
 
 static int usage(void)
 {
@@ -198,6 +212,14 @@ void termination_handler (int signum)
 {
 	is_running = 0;
 }
+
+void sigchild_handler (int signum)
+{
+	pid_t pid;
+	pid = wait(NULL);
+	info(("Main daemon registered finished Child daemon with pid = %d", pid));
+}
+
 
 enum {
 	/* Used to un-confuse clang checker */
@@ -212,7 +234,8 @@ int main(int argc, char *argv[])
 	void *module;
 	const char *path, *tls_psk_keyfile;
 	fd_set read_fds;
-	int sock, ret, mode;
+	struct timeval twait;
+	int sock, ret, mode, nfds;
 	CK_RV rv;
 	CK_C_INITIALIZE_ARGS init_args;
 	GckRpcTlsPskState *tls;
@@ -303,6 +326,10 @@ int main(int argc, char *argv[])
 		/* Shut down gracefully on SIGTERM. */
 		if (signal (SIGTERM, termination_handler) == SIG_IGN)
 			signal (SIGTERM, SIG_IGN);
+		/* Wait for finished child processes  */
+		if (signal (SIGCHLD, sigchild_handler) == SIG_IGN)
+			signal (SIGCHLD, SIG_IGN);
+
 
 		mode = GCP_RPC_DAEMON_MODE_SOCKET;
 	}
@@ -319,32 +346,56 @@ int main(int argc, char *argv[])
            gck_rpc_layer_inetd(funcs);
         } else if (mode == GCP_RPC_DAEMON_MODE_SOCKET) {
 	   is_running = 1;
+	   nfds = sock + 1;
 	   while (is_running) {
 		FD_ZERO(&read_fds);
-		FD_SET(sock, &read_fds);
-		ret = select(sock + 1, &read_fds, NULL, NULL, NULL);
+		if ( nfds ) FD_SET(sock, &read_fds);
+		twait.tv_sec=5;
+		twait.tv_usec=0;
+		ret = select(nfds, &read_fds, NULL, NULL, &twait);
 		if (ret < 0) {
 			if (errno == EINTR)
 				continue;
-			fprintf(stderr, "error watching socket: %s\n",
-				strerror(errno));
+			warning(("error watching socket: %s", strerror(errno)));
 			exit(1);
 		}
+		else if ( ret == 0) {
+			debug(("select timeout"));
+		}
 
-		if (FD_ISSET(sock, &read_fds))
-			gck_rpc_layer_accept(tls);
+		if (FD_ISSET(sock, &read_fds)) {
+
+			ret = gck_rpc_layer_accept(tls);
+			if (ret < 0) {
+				// error
+				debug(("Accept rpc layer failed"));
+			}
+			else if ( ret  == 0 ) {
+				// parent
+				debug(("Parent continue listening"));
+				continue;
+			}
+			else {
+				// child
+				// do not listen more on socket in this process
+				close(sock);
+				nfds = 0;
+				debug(("Child daemon closed listening socket"));
+			}
+		}
 	   }
 
+	   debug(("Listen loop finished"));
 	   gck_rpc_layer_uninitialize();
         } else {
 		/* Not reached */
 		exit(-1);
 	}
 
+	debug(("Finalize PKCS11 api"));
 	rv = (funcs->C_Finalize) (NULL);
 	if (rv != CKR_OK)
-		fprintf(stderr, "couldn't finalize module: %s: 0x%08x\n",
-			argv[1], (int)rv);
+		warning(("couldn't finalize module: %s: 0x%08x", argv[1], (int)rv));
 
 	dlclose(module);
 
@@ -354,5 +405,6 @@ int main(int argc, char *argv[])
 		tls = NULL;
 	}
 
+	debug(("Daemon exit"));
 	return 0;
 }

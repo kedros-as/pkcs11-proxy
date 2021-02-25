@@ -115,6 +115,8 @@ static CK_RV rpc_C_Finalize(CallState *);
 
 static int _install_dispatch_syscall_filter(int use_tls);
 
+extern int is_running;
+
 /* -----------------------------------------------------------------------------
  * LOGGING and DEBUGGING
  */
@@ -564,7 +566,7 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 			debug(("  Attribute final value len =%d", value));
 			if( gck_rpc_has_ulong_parameter(attrs[i].type)) {
 				if( value == sizeof (uint64_t) )  debug(("  Attribute final 64b value =%"PRIx64" ", *((uint64_t *)(attrs[i].pValue)) ));
-+                               else if (value == 4) debug(("  Attribute final 32b value =  %d", *((uint32_t*) (attrs[i].pValue)) ));
+				else if (value == 4) debug(("  Attribute final 32b value =  %d", *((uint32_t*) (attrs[i].pValue)) ));
 			}
 		} else {
 			attrs[i].pValue = NULL;
@@ -974,6 +976,7 @@ static CK_RV rpc_C_Finalize(CallState * cs)
 	pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
 
 	debug(("ret: %d", ret));
+	is_running = 0;
 	return ret;
 }
 
@@ -2361,13 +2364,16 @@ static int pkcs11_socket = -1;
 /* The unix socket path, that we listen on */
 static char pkcs11_socket_path[MAXPATHLEN] = { 0, };
 
-void gck_rpc_layer_accept(GckRpcTlsPskState *tls)
+
+/* returns context id  0 - for parrent process 1 for a child process  */
+int gck_rpc_layer_accept(GckRpcTlsPskState *tls)
 {
 	struct sockaddr_storage addr;
 	DispatchState *ds, **here;
 	int error;
 	socklen_t addrlen;
 	int new_fd;
+	pid_t pid;
 
 	assert(pkcs11_socket != -1);
 
@@ -2387,38 +2393,64 @@ void gck_rpc_layer_accept(GckRpcTlsPskState *tls)
 	addrlen = sizeof(addr);
 	new_fd = accept(pkcs11_socket, (struct sockaddr *)&addr, &addrlen);
 	if (new_fd < 0) {
-		gck_rpc_warn("cannot accept pkcs11 connection: %s",
-			     strerror(errno));
-		return;
+		gck_rpc_warn("cannot accept pkcs11 connection: %s", strerror(errno));
+                pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+		return 0 ;
 	}
 
-	ds = calloc(1, sizeof(DispatchState));
-	if (ds == NULL) {
-		gck_rpc_warn("out of memory");
-		close(new_fd);
-		return;
-	}
+        if ((pid = fork()) == -1)
+        {
+                gck_rpc_warn("cannot fork to a new pkcs11 daemon: %s", strerror(errno));
+                close(new_fd);
+                pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                return 0 ;
+        }
+        else if(pid > 0)
+        {
+                gck_rpc_warn("Parent pkcs11 daemon started a new process with pid = %d", pid);
+                close(new_fd);
+                pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                return 0;
+        }
+        else if(pid == 0)
+        {
 
-	ds->cs.sock = new_fd;
-        ds->cs.read = &read_all;
-        ds->cs.write = &write_all;
-	ds->cs.addr = addr;
-	ds->cs.addrlen = addrlen;
-	ds->cs.tls = tls;
+                gck_rpc_warn("I am the new pkcs11 daemon ");
+                ds = calloc(1, sizeof(DispatchState));
+                if (ds == NULL) {
+                        gck_rpc_warn("out of memory");
+                        close(new_fd);
+			is_running = 0;
+			pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                        return 1;
+                }
 
-	error = pthread_create(&ds->thread, NULL,
-			       run_dispatch_thread, &(ds->cs));
-	if (error) {
-		gck_rpc_warn("couldn't start thread: %s", strerror(errno));
-		close(new_fd);
-		free(ds);
-		return;
-	}
+                ds->cs.sock = new_fd;
+                ds->cs.read = &read_all;
+                ds->cs.write = &write_all;
+                ds->cs.addr = addr;
+                ds->cs.addrlen = addrlen;
+                ds->cs.tls = tls;
 
-	ds->next = pkcs11_dispatchers;
-	pkcs11_dispatchers = ds;
-	pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                error = pthread_create(&ds->thread, NULL,
+                                run_dispatch_thread, &(ds->cs));
+                if (error) {
+                        gck_rpc_warn("couldn't start thread: %s", strerror(errno));
+                        close(new_fd);
+                        free(ds);
+			is_running = 0;
+			pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                        return 1;
+                }
+
+                ds->next = pkcs11_dispatchers;
+                pkcs11_dispatchers = ds;
+                pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
+                /* here we have a new thread for connection ready running */
+                return 1;
+        }
 }
+
 
 static int _inetd_read(CallState *cs, void *data, size_t len)
 {

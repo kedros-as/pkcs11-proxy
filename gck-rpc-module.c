@@ -33,7 +33,7 @@
 #include <sys/param.h>
 #ifdef __MINGW32__
 # include <winsock2.h>
-# include <Ws2tcpip.h>
+# include <ws2tcpip.h>
 #else
 # include <sys/socket.h>
 # include <sys/un.h>

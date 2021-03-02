@@ -55,12 +55,12 @@ endif (WIN32)
 if (WIN32)
 target_link_libraries (pkcs11-proxy  -static pthread ${OPENSSL_LIBRARIES} ws2_32 )
 endif (WIN32)
-#target_link_libraries (pkcs11-proxy  -static pthread ${OPENSSL_LIBRARIES} )
+target_link_libraries (pkcs11-proxy  pthread ${OPENSSL_LIBRARIES} )
 target_link_libraries (pkcs11-daemon dl pthread ssl crypto seccomp)
 #target_link_libraries (libtest dl  )
 
 install_targets (/lib pkcs11-proxy)
-#install_targets (/bin pkcs11-daemon)
+install_targets (/bin pkcs11-daemon)
 #install_targets (/bin libtest)
 
 add_custom_command(

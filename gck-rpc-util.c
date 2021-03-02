@@ -86,7 +86,13 @@ void log_buff_hexs(char *label, char *data, size_t len)
 
 	return ;
 }
-
+void gck_rpc_info(const char *msg, ...)
+{
+	va_list va;
+	va_start(va, msg);
+	do_log("INFO", msg, va);
+	va_end(va);
+}
 void gck_rpc_warn(const char *msg, ...)
 {
 	va_list va;
@@ -97,10 +103,12 @@ void gck_rpc_warn(const char *msg, ...)
 
 void gck_rpc_debug(const char *msg, ...)
 {
+#if (DEBUG_OUTPUT == 1)
 	va_list va;
 	va_start(va, msg);
 	do_log("DEBUG", msg, va);
 	va_end(va);
+#endif
 }
 
 int gck_rpc_mechanism_is_supported(CK_MECHANISM_TYPE mech)

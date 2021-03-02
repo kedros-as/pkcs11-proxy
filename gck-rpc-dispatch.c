@@ -943,7 +943,7 @@ static CK_RV rpc_C_Finalize(CallState * cs)
 	/* Close all sessions that have been opened by this thread, regardless of slot */
 	for (i = 0; i < PKCS11PROXY_MAX_SESSION_COUNT; i++) {
 		if (cs->sessions[i].id) {
-			gck_rpc_log("Closing session %li on position %i", cs->sessions[i].id, i);
+			gck_rpc_info("Closing session %li on position %i", cs->sessions[i].id, i);
 
 			ret = (pkcs11_module->C_CloseSession) (cs->sessions[i].id);
 			if (ret != CKR_OK)
@@ -965,7 +965,7 @@ static CK_RV rpc_C_Finalize(CallState * cs)
 			continue ;
 		if (c->req &&
 		    (c->req->call_id == GCK_RPC_CALL_C_WaitForSlotEvent)) {
-			gck_rpc_log("Sending interuption signal to %i\n",
+			gck_rpc_info("Sending interuption signal to %i\n",
                                     c->sock);
 			if (c->sock != -1)
 				if (shutdown(c->sock, SHUT_RDWR) == 0)
@@ -1115,7 +1115,7 @@ static CK_RV rpc_C_OpenSession(CallState * cs)
 			if (! cs->sessions[i].id) {
 				cs->sessions[i].id = session;
 				cs->sessions[i].slot = slot_id;
-				gck_rpc_log("Session %li stored in position %i", session, i);
+				gck_rpc_info("Session %li stored in position %i", session, i);
 				break;
 			}
 		}
@@ -1139,7 +1139,7 @@ static CK_RV rpc_C_CloseSession(CallState * cs)
 		/* Remove this session from this threads list */
 		for (i = 0; i < PKCS11PROXY_MAX_SESSION_COUNT; i++) {
 			if (cs->sessions[i].id == session) {
-				gck_rpc_log("Session %li removed from position %i", session, i);
+				gck_rpc_info("Session %li removed from position %i", session, i);
 				cs->sessions[i].id = 0;
 				break;
 			}
@@ -2276,7 +2276,7 @@ static void run_dispatch_loop(CallState *cs)
 		return ;
 	}
 
-	gck_rpc_log("New session %d-%d (client %s, port %s)", (uint32_t) (cs->appid >> 32),
+	gck_rpc_info("New session %d-%d (client %s, port %s)", (uint32_t) (cs->appid >> 32),
 		    (uint32_t) cs->appid, hoststr, portstr);
 
 	/* Setup our buffers */
@@ -2303,7 +2303,7 @@ static void run_dispatch_loop(CallState *cs)
 			break;
 		}
 
-		gck_rpc_log("DATA: len %u bytes", len );
+		gck_rpc_debug("DATA: len %u bytes", len );
 		/* Allocate memory */
 		egg_buffer_reserve(&cs->req->buffer, cs->req->buffer.len + len);
 		if (egg_buffer_has_error(&cs->req->buffer)) {
@@ -2407,7 +2407,7 @@ int gck_rpc_layer_accept(GckRpcTlsPskState *tls)
         }
         else if(pid > 0)
         {
-                gck_rpc_warn("Parent pkcs11 daemon started a new process with pid = %d", pid);
+                gck_rpc_info("Parent pkcs11 daemon started a new process with pid = %d", pid);
                 close(new_fd);
                 pthread_mutex_unlock(&pkcs11_dispatchers_mutex);
                 return 0;
@@ -2415,7 +2415,7 @@ int gck_rpc_layer_accept(GckRpcTlsPskState *tls)
         else if(pid == 0)
         {
 
-                gck_rpc_warn("I am the new pkcs11 daemon ");
+                gck_rpc_info("I am the new pkcs11 daemon ");
                 ds = calloc(1, sizeof(DispatchState));
                 if (ds == NULL) {
                         gck_rpc_warn("out of memory");
@@ -2657,7 +2657,7 @@ int gck_rpc_layer_initialize(const char *prefix, CK_FUNCTION_LIST_PTR module)
 		}
 	}
 
-	gck_rpc_log("Listening on: %s", pkcs11_socket_path);
+	gck_rpc_info("Listening on: %s", pkcs11_socket_path);
 
 	pkcs11_module = module;
 	pkcs11_socket = sock;

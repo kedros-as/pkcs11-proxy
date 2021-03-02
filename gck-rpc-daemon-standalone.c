@@ -46,6 +46,18 @@
 
 #define SOCKET_PATH "tcp://127.0.0.1"
 
+#ifndef DEBUG_OUTPUT
+#define DEBUG_OUTPUT 0
+#endif
+
+#if (DEBUG_OUTPUT == 1)
+#define debug(x) gck_rpc_debug x
+#else
+#define debug(x)
+#endif
+#define info(x) gck_rpc_info x
+#define warning(x) gck_rpc_warn x
+
 #ifdef SECCOMP
 #include <seccomp.h>
 //#include "seccomp-bpf.h"
@@ -201,8 +213,9 @@ void termination_handler (int signum)
 
 void sigchild_handler (int signum)
 {
-	wait(NULL);
-	fprintf(stderr, "Main daemon registered finished Child daemon %d\n");
+	pid_t pid;
+	pid = wait(NULL);
+	info(("Main daemon registered finished Child daemon with pid = %d", pid));
 }
 
 
@@ -341,11 +354,11 @@ int main(int argc, char *argv[])
 		if (ret < 0) {
 			if (errno == EINTR)
 				continue;
-			fprintf(stderr, "error watching socket: %s\n", strerror(errno));
+			warning(("error watching socket: %s", strerror(errno)));
 			exit(1);
 		}
 		else if ( ret == 0) {
-			fprintf(stderr, " select timeout \n ");
+			debug(("select timeout"));
 		}
 
 		if (FD_ISSET(sock, &read_fds)) {
@@ -353,36 +366,34 @@ int main(int argc, char *argv[])
 			ret = gck_rpc_layer_accept(tls);
 			if (ret < 0) {
 				// error
-				fprintf(stderr, "Accept rpc layer failed \n");
+				debug(("Accept rpc layer failed"));
 			}
 			else if ( ret  == 0 ) {
 				// parent
-				fprintf(stderr, "Parent Continue listening \n");
+				debug(("Parent continue listening"));
 				continue;
 			}
 			else {
 				// child
 				// do not listen more on socket in this process
-				fprintf(stderr, " I am a child \n");
 				close(sock);
 				nfds = 0;
-				fprintf(stderr, " Child  Closed listening socket \n");
+				debug(("Child daemon closed listening socket"));
 			}
 		}
 	   }
 
-	   fprintf(stderr, "Listen loop finished\n");
+	   debug(("Listen loop finished"));
 	   gck_rpc_layer_uninitialize();
         } else {
 		/* Not reached */
 		exit(-1);
 	}
 
-	fprintf(stderr, "Finalize PKCS11 api \n");
+	debug(("Finalize PKCS11 api"));
 	rv = (funcs->C_Finalize) (NULL);
 	if (rv != CKR_OK)
-		fprintf(stderr, "couldn't finalize module: %s: 0x%08x\n",
-			argv[1], (int)rv);
+		warning(("couldn't finalize module: %s: 0x%08x", argv[1], (int)rv));
 
 	dlclose(module);
 
@@ -392,6 +403,6 @@ int main(int argc, char *argv[])
 		tls = NULL;
 	}
 
-	fprintf(stderr, "Daemon exitus\n");
+	debug(("Daemon exit"));
 	return 0;
 }

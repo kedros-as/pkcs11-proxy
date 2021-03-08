@@ -38,11 +38,13 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
-#include <syslog.h>
 
 #ifdef __MINGW32__
 # include <winsock2.h>
+#else 
+# include <syslog.h>
 #endif
+
 
 #define SOCKET_PATH "tcp://127.0.0.1"
 

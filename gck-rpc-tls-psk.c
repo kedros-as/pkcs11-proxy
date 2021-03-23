@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 /* TLS pre-shared key */
 static char tls_psk_identity[128] = { 0, };
@@ -185,7 +186,7 @@ _tls_psk_server_cb(SSL *ssl, const char *identity,
 
 	if ((fd = open(tls_psk_key_filename, O_RDONLY | O_CLOEXEC)) < 0) {
 		gck_rpc_warn("can't open TLS-PSK keyfile '%.100s' for reading : %s",
-			     tls_psk_key_filename, strerror(errno));
+			tls_psk_key_filename, strerror(errno));
 		return 0;
 	}
 
@@ -235,6 +236,7 @@ _tls_psk_client_cb(SSL *ssl, const char *hint,
 		   char *identity, unsigned int max_identity_len,
 		   unsigned char *psk, unsigned int max_psk_len)
 {
+	debug(("Setting client side identity "));
 	/* Client tells server which identity it wants to use in ClientKeyExchange */
 	snprintf(identity, max_identity_len, "%s", tls_psk_identity);
 
@@ -259,9 +261,17 @@ gck_rpc_init_tls_psk(GckRpcTlsPskState *state, const char *key_filename,
 	}
 
 	/* Global OpenSSL initialization */
-	SSL_load_error_strings();
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	debug(("Calling OPENSSL_init_ssl"));
+	OPENSSL_init_ssl(OPENSSL_INIT_NO_ATEXIT, NULL);
+#else
+	debug(("Calling SSL_library_init"));
 	SSL_library_init();
 	OpenSSL_add_ssl_algorithms();
+#endif
+	debug(("Calling SSL_load_error_string "));
+	SSL_load_error_strings();
+
 
 	assert(caller == GCK_RPC_TLS_PSK_CLIENT || caller == GCK_RPC_TLS_PSK_SERVER);
 
@@ -271,6 +281,7 @@ gck_rpc_init_tls_psk(GckRpcTlsPskState *state, const char *key_filename,
 		gck_rpc_warn("can't initialize SSL_CTX");
 		return 0;
 	}
+	SSL_CTX_set_verify(state->ssl_ctx, SSL_VERIFY_NONE, NULL);
 
 	/* Set up callback for TLS-PSK initialization */
 	if (caller == GCK_RPC_TLS_PSK_CLIENT)
@@ -308,26 +319,32 @@ gck_rpc_start_tls(GckRpcTlsPskState *state, int sock)
 	int res;
 	char buf[256];
 
+	debug(("Calling SSL_new "));
 	state->ssl = SSL_new(state->ssl_ctx);
 	if (! state->ssl) {
 		warning(("can't initialize SSL"));
 		return 0;
 	}
 
+	debug(("Calling BIO_new_socket "));
 	state->bio = BIO_new_socket(sock, BIO_NOCLOSE);
 	if (! state->bio) {
 		warning(("can't initialize SSL BIO"));
 		return 0;
 	}
 
+	debug(("Calling SSL_set_bio "));
 	SSL_set_bio(state->ssl, state->bio, state->bio);
 
 	/* Set up callback for TLS-PSK initialization */
-	if (state->type == GCK_RPC_TLS_PSK_CLIENT)
+	if (state->type == GCK_RPC_TLS_PSK_CLIENT){
+		debug(("Calling SSL_connect "));
 		res = SSL_connect(state->ssl);
-	else
+	}
+	else {
+		debug(("Calling SSL_accept "));
 		res = SSL_accept(state->ssl);
-
+	}
 	if (res != 1) {
 		ERR_error_string_n(ERR_get_error(), buf, sizeof(buf));
 		warning(("can't start TLS : %i/%i (%s perhaps)",
@@ -345,11 +362,13 @@ void
 gck_rpc_close_tls(GckRpcTlsPskState *state)
 {
 	if (state->ssl_ctx) {
+		debug(("Calling SSL_CTX_free"));
 		SSL_CTX_free(state->ssl_ctx);
 		state->ssl_ctx = NULL;
 	}
 
 	if (state->ssl) {
+		debug(("Calling SSL_free"));
 		SSL_free(state->ssl);
 		state->ssl = NULL;
 	}

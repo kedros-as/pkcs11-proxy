@@ -27,6 +27,7 @@
 
 #include "gck-rpc-layer.h"
 #include "gck-rpc-tls-psk.h"
+#include "gck-rpc-util.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -37,6 +38,7 @@
 
 #include <dlfcn.h>
 #include <pthread.h>
+#include <sys/wait.h>
 
 
 #ifdef __MINGW32__

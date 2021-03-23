@@ -25,6 +25,7 @@
 
 #include "gck-rpc-layer.h"
 #include "gck-rpc-private.h"
+#include "gck-rpc-util.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -203,7 +204,7 @@ int gck_rpc_message_parse(GckRpcMessage * msg, GckRpcMessageType type)
 		return 0;
 	}
 	debug(("P Received Messasge signature len= %d, string=%s",len, val));
-	log_buff_hexs("P Received signature hexdump:", val,  len);
+	log_buff_hexs("P Received signature hexdump:", (const char*) val,  len);
 
 	return 1;
 }

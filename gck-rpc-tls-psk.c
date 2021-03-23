@@ -260,22 +260,31 @@ gck_rpc_init_tls_psk(GckRpcTlsPskState *state, const char *key_filename,
 		return 0;
 	}
 
+	assert(caller == GCK_RPC_TLS_PSK_CLIENT || caller == GCK_RPC_TLS_PSK_SERVER);
+
 	/* Global OpenSSL initialization */
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	debug(("Calling OPENSSL_init_ssl"));
 	OPENSSL_init_ssl(OPENSSL_INIT_NO_ATEXIT, NULL);
+	
+	state->ssl_ctx = SSL_CTX_new(TLS_method());
+
+	SSL_CTX_set_min_proto_version(state->ssl_ctx, TLS1_2_VERSION);
+	SSL_CTX_set_max_proto_version(state->ssl_ctx, TLS1_3_VERSION);
+
 #else
 	debug(("Calling SSL_library_init"));
 	SSL_library_init();
 	OpenSSL_add_ssl_algorithms();
-#endif
+	
 	debug(("Calling SSL_load_error_string "));
 	SSL_load_error_strings();
 
-
-	assert(caller == GCK_RPC_TLS_PSK_CLIENT || caller == GCK_RPC_TLS_PSK_SERVER);
-
 	state->ssl_ctx = SSL_CTX_new(TLSv1_2_method());
+#endif
+
+
+
 
 	if (state->ssl_ctx == NULL) {
 		gck_rpc_warn("can't initialize SSL_CTX");

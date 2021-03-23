@@ -21,7 +21,7 @@ endif ( CMAKE_HOST_APPLE)
 
 set ( PKCS11_PROXY_SRCS gck-rpc-module.c gck-rpc-message.c gck-rpc-util.c egg-buffer.c gck-rpc-tls-psk.c )
 if ( NOT WIN32 )
-	set ( PKCS11_DAEMON_SRCS egg-buffer.c gck-rpc-daemon-standalone.c gck-rpc-dispatch.c gck-rpc-message.c gck-rpc-util.c syscall-reporter.c syscall-names.h gck-rpc-tls-psk.c )
+	set ( PKCS11_DAEMON_SRCS egg-buffer.c gck-rpc-daemon-standalone.c gck-rpc-dispatch.c gck-rpc-message.c gck-rpc-util.c syscall-names.h gck-rpc-tls-psk.c )
 endif ( NOT WIN32)
 
 #set ( LIBTEST_SRCS libtest.c )

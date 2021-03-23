@@ -26,6 +26,7 @@
 #include "gck-rpc-layer.h"
 #include "gck-rpc-private.h"
 #include "gck-rpc-tls-psk.h"
+#include "gck-rpc-util.h"
 
 #include "pkcs11/pkcs11.h"
 #include "pkcs11/pkcs11g.h"
@@ -547,7 +548,7 @@ proto_read_attribute_array(CallState * cs, CK_ATTRIBUTE_PTR * result,
 				    ("attribute length and data do not match");
 				return PARSE_ERROR;
 			}
-			log_buff_hexs(" Attribute value hex dump = ", data, n_data);
+			log_buff_hexs(" Attribute value hex dump = ", (const char*) data, n_data);
 
 			CK_ULONG a;
 
@@ -2315,7 +2316,7 @@ static void run_dispatch_loop(CallState *cs)
 		if (!cs->read(cs, cs->req->buffer.buf, len))
 			break;
 		
-		log_buff_hex(cs->req->buffer.buf,len);
+		log_buff_hex((const char*) cs->req->buffer.buf,len);
 
 		egg_buffer_add_empty(&cs->req->buffer, len);
 
@@ -2426,8 +2427,8 @@ int gck_rpc_layer_accept(GckRpcTlsPskState *tls)
                 }
 
                 ds->cs.sock = new_fd;
-                ds->cs.read = &read_all;
-                ds->cs.write = &write_all;
+                ds->cs.read = (int (*)(void *cs, unsigned char *,size_t)) &read_all;
+                ds->cs.write = (int (*)(void *cs, unsigned char *,size_t)) &write_all;
                 ds->cs.addr = addr;
                 ds->cs.addrlen = addrlen;
                 ds->cs.tls = tls;
@@ -2449,6 +2450,8 @@ int gck_rpc_layer_accept(GckRpcTlsPskState *tls)
                 /* here we have a new thread for connection ready running */
                 return 1;
         }
+	// never gets here
+	return 0; 
 }
 
 
@@ -2470,8 +2473,8 @@ void gck_rpc_layer_inetd(CK_FUNCTION_LIST_PTR module)
 
    memset(&cs, 0, sizeof(cs));
    cs.sock = STDIN_FILENO;
-   cs.read = &_inetd_read;
-   cs.write = &_inetd_write;
+   cs.read = (int (*)(void *cs, unsigned char *,size_t)) &_inetd_read;
+   cs.write = (int (*)(void *cs, unsigned char *,size_t)) &_inetd_write;
 
    pkcs11_module = module;
 

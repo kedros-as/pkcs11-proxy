@@ -25,6 +25,7 @@
 
 #include "gck-rpc-layer.h"
 #include "gck-rpc-private.h"
+#include "gck-rpc-util.h"
 
 #include <stdarg.h>
 #include <string.h>
@@ -61,14 +62,14 @@ static void do_log(const char *pref, const char *msg, va_list va)
 }
 
 
-void log_buff_hex(char *data, size_t len)
+void log_buff_hex(const char *data, size_t len)
 {
 	char label[]="DATA DUMP:";
 	log_buff_hexs(label, data, len);
 	return ;
 }
 
-void log_buff_hexs(char *label, char *data, size_t len)
+void log_buff_hexs(const char *label, const char *data, size_t len)
 {
 	size_t i;
 	char *s = malloc(len * 3 + 1);
